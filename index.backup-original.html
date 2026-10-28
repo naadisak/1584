@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Traffic Incident Management Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { font-family: 'Bai Jamjuree', sans-serif; background-color: #f4f6f9; color: #333; }
+    .card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; }
+    .card-header { background-color: #ffffff; border-bottom: 1px solid #edf2f7; padding: 16px 20px; font-weight: 600; border-radius: 12px 12px 0 0 !important; }
+    .btn-primary { background-color: #10b981; border-color: #10b981; font-weight: 500; }
+    .btn-primary:hover { background-color: #059669; border-color: #059669; }
+    .badge-ready { background-color: #d1fae5; color: #065f46; }
+    .badge-pending { background-color: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body class="p-3 p-md-4">
+  <div class="container-fluid" style="max-width: 1200px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h4 class="fw-bold mb-0">🚦 ระบบจัดการข้อมูลแจ้งเบาะแส (GitHub Pages Frontend)</h4>
+      <button class="btn btn-outline-secondary btn-sm" onclick="loadAllData()">🔄 รีเฟรชข้อมูล</button>
+    </div>
+
+    <!-- 1. FORM NEW RECORD -->
+    <div class="card border-top border-4 border-success">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>➕ เพิ่มเคสใหม่ (New Incident Record)</span>
+        <span class="badge bg-success-subtle text-success">Web Admin Mode</span>
+      </div>
+      <div class="card-body">
+        <form id="newRecordForm" onsubmit="handleFormSubmit(event)">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">ประเภทไฟล์</label>
+              <select class="form-select" id="fileType" required>
+                <option value="IMAGE">📷 รูปภาพ (Image)</option>
+                <option value="VIDEO">🎥 วิดีโอ (Video)</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold">แนบไฟล์สื่อ</label>
+              <input type="file" class="form-control" id="fileInput" accept="image/*,video/*">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">เลขทะเบียนและจังหวัด</label>
+              <input type="text" class="form-control" id="plate" placeholder="เช่น ขท 2338 กรุงเทพมหานคร" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">ประเภทรถ</label>
+              <select class="form-select" id="vehicleType" onchange="onVehicleTypeChange()" required>
+                <option value="">-- เลือกประเภทรถ --</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">ข้อกล่าวหา / ความผิด</label>
+              <select class="form-select" id="offense" required>
+                <option value="">-- เลือกข้อกล่าวหา --</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">สถานที่ / พิกัด</label>
+              <input type="text" class="form-control" id="address" placeholder="เช่น ถนนวิภาวดี หน้าจตุจักร">
+            </div>
+          </div>
+          <div class="mt-3 text-end">
+            <button type="submit" class="btn btn-primary px-4" id="submitBtn">💾 บันทึกเคสใหม่</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. DASHBOARD TABLE -->
+    <div class="card">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>📊 สรุปรายการข้อมูลทั้งหมด (<span id="totalRecords">0</span> เคส)</span>
+        <input type="text" class="form-control form-control-sm w-auto" id="searchFilter" placeholder="🔍 ค้นหาทะเบียน..." onkeyup="filterData()">
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>วัน-เวลา</th>
+                <th>หลักฐาน</th>
+                <th>ทะเบียน & จังหวัด</th>
+                <th>ประเภทรถ</th>
+                <th>ข้อกล่าวหา</th>
+                <th>สถานที่</th>
+                <th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr><td colspan="7" class="text-center py-4 text-muted">กำลังโหลดข้อมูลจาก Apps Script...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ ใส่ Web App URL ของ Google Apps Script ที่นี่
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbybGe_uL_fEC_8JX4va2-S4CvlbX0NAN1JQKh5YNViTEQALuTYVpHuCNKkWxj2ZoNVs/exec'; 
+
+    let rawData = [];
+    let configMap = {};
+
+    window.onload = function() {
+      loadConfig();
+      loadAllData();
+    };
+
+    function loadConfig() {
+      fetch(GAS_URL + '?action=getConfig')
+        .then(res => res.json())
+        .then(config => {
+          configMap = config.offensesMap || {};
+          const vSelect = document.getElementById('vehicleType');
+          vSelect.innerHTML = '<option value="">-- เลือกประเภทรถ --</option>';
+          (config.vehicleTypes || []).forEach(v => {
+            vSelect.innerHTML += `<option value="${v}">${v}</option>`;
+          });
+        })
+        .catch(err => console.error('Config Error:', err));
+    }
+
+    function onVehicleTypeChange() {
+      const v = document.getElementById('vehicleType').value;
+      const oSelect = document.getElementById('offense');
+      oSelect.innerHTML = '<option value="">-- เลือกข้อกล่าวหา --</option>';
+      const offenses = configMap[v] || ['ดัดแปลงสภาพรถ', 'จอดรถในที่ห้ามจอด'];
+      offenses.forEach(o => {
+        oSelect.innerHTML += `<option value="${o}">${o}</option>`;
+      });
+    }
+
+    function loadAllData() {
+      fetch(GAS_URL + '?action=getData')
+        .then(res => res.json())
+        .then(data => {
+          rawData = data;
+          renderTable(rawData);
+        })
+        .catch(err => console.error('Data Error:', err));
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('tableBody');
+      document.getElementById('totalRecords').innerText = data.length;
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">ไม่พบข้อมูลเคสในระบบ</td></tr>';
+        return;
+      }
+      let html = '';
+      data.forEach(r => {
+        const fileMedia = r.fileUrl ? `<a href="${r.fileUrl}" target="_blank" class="btn btn-sm btn-outline-info">📁 เปิดดูไฟล์</a>` : '-';
+        const badgeClass = r.status === 'Ready to Submit' ? 'badge-ready' : 'badge-pending';
+        html += `
+          <tr>
+            <td class="small">${r.timestamp}</td>
+            <td>${fileMedia}</td>
+            <td class="fw-bold">${r.plate || '-'}</td>
+            <td>${r.vehicleType || '-'}</td>
+            <td><span class="badge bg-secondary-subtle text-dark">${r.offense || '-'}</span></td>
+            <td class="small text-truncate" style="max-width: 180px;">${r.address || '-'}</td>
+            <td><span class="badge ${badgeClass}">${r.status}</span></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function filterData() {
+      const search = document.getElementById('searchFilter').value.toLowerCase();
+      const filtered = rawData.filter(r => r.plate.toLowerCase().includes(search) || r.address.toLowerCase().includes(search));
+      renderTable(filtered);
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = '⏳ กำลังบันทึกข้อมูล...';
+
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          sendPostRequest({
+            action: 'addNewRecord',
+            payload: {
+              fileType: document.getElementById('fileType').value,
+              fileName: file.name,
+              fileMimeType: file.type,
+              fileData: evt.target.result,
+              plate: document.getElementById('plate').value,
+              vehicleType: document.getElementById('vehicleType').value,
+              offense: document.getElementById('offense').value,
+              address: document.getElementById('address').value
+            }
+          });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        sendPostRequest({
+          action: 'addNewRecord',
+          payload: {
+            fileType: document.getElementById('fileType').value,
+            plate: document.getElementById('plate').value,
+            vehicleType: document.getElementById('vehicleType').value,
+            offense: document.getElementById('offense').value,
+            address: document.getElementById('address').value
+          }
+        });
+      }
+    }
+
+    function sendPostRequest(bodyData) {
+      fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify(bodyData)
+      })
+      .then(res => res.json())
+      .then(res => {
+        alert('🎉 บันทึกเคสใหม่สำเร็จ!');
+        document.getElementById('newRecordForm').reset();
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').innerText = '💾 บันทึกเคสใหม่';
+        loadAllData();
+      })
+      .catch(err => {
+        alert('เกิดข้อผิดพลาด: ' + err);
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').innerText = '💾 บันทึกเคสใหม่';
+      });
+    }
+  </script>
+</body>
+</html>
