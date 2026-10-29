@@ -9,6 +9,14 @@
 <meta name="description" content="ระบบจัดการข้อมูลแจ้งเบาะแสจราจร — เพิ่มเคส ตรวจสอบหลักฐาน และติดตามสถานะได้ในที่เดียว">
 <title>สะสม Case เพื่อแจ้งวันสิ้นเดือน</title>
 
+<!-- PWA: ติดตั้งบนหน้าจอโฮมได้ -->
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Case จราจร">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
 <script>
   /* ตั้งธีมก่อนวาดหน้า เพื่อไม่ให้จอวูบขาว */
   try {
@@ -328,9 +336,38 @@ a { color: var(--brand-ink); }
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 0 0;
+  /* ซ่อนแถบเลื่อน (ยังเลื่อนได้ด้วยล้อ/สัมผัส) — ฟอร์มถูกแบ่งเป็นแท็บให้เตี้ยลงแล้ว */
+  scrollbar-width: none;
 }
-.panel--form::-webkit-scrollbar { width: 8px; }
-.panel--form::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: var(--r); }
+.panel--form::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* ---------- step tabs ---------- */
+.steps { display: flex; gap: 6px; margin-bottom: 14px; }
+.step {
+  flex: 1; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 8px; border-radius: var(--r);
+  border: 1px solid var(--line-strong); background: var(--surface-2);
+  color: var(--muted); font-size: .8rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background .16s, border-color .16s, color .16s;
+}
+.step:hover { border-color: var(--brand); color: var(--brand-ink); }
+.step.is-active { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+.step__no {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  background: var(--surface-3); color: var(--text-2);
+  font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.step.is-active .step__no { background: var(--brand); color: #fff; }
+.step__tx { overflow: hidden; text-overflow: ellipsis; }
+.step-panel { animation: fade .18s ease; }
+
+@media (max-width: 400px) {
+  .step__tx { display: none; }
+  .step { padding: 9px; }
+}
 
 .panel__head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -476,9 +513,9 @@ a { color: var(--brand-ink); }
 .row-2 { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; }
 .row-2 > .field:first-child .select { padding-left: 10px; font-size: .85rem; }
 
-.form-actions { display: flex; gap: 8px; margin-top: 16px; }
-.form-actions .btn--primary { flex: 1; }
-.form-actions .btn--ghost { flex: none; width: 78px; }
+.form-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.form-actions .btn--primary { flex: 1 1 140px; }
+.form-actions .btn--ghost { flex: 0 0 auto; padding-inline: 14px; }
 .kbd-hint {
   margin-top: 10px; text-align: center;
   font-size: .72rem; color: var(--muted);
@@ -669,6 +706,59 @@ tr:hover .mini, .mini:focus-visible { opacity: 1; }
 .media__ph { font-size: 1.05rem; }
 .media__ph { position: relative; z-index: 0; }
 .media--fallback .media__ph { display: grid; }
+.media__count {
+  position: absolute; right: 2px; bottom: 2px; z-index: 2;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: rgba(9,20,36,.82); color: #fff;
+  font-size: .64rem; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255,255,255,.35);
+  pointer-events: none;
+}
+
+/* ---------- album (หลายหลักฐานในเคสเดียว) ---------- */
+.album {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.album--form {
+  border: 1px solid var(--line); border-radius: var(--r);
+  margin-top: 8px; padding: 8px; background: var(--surface-2);
+}
+.album__strip {
+  /* ไม่ใช้ scrollbar — ให้รูปตัดขึ้นบรรทัดใหม่แทน (เห็นครบทุกรูปในครั้งเดียว) */
+  display: flex; flex-wrap: wrap; align-content: center;
+  gap: 7px; flex: 1; padding: 2px;
+  overflow: visible;
+  scrollbar-width: none;
+}
+.album__strip::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.album__thumb {
+  flex: none; width: 58px; height: 58px; padding: 0;
+  border-radius: var(--r); overflow: hidden; cursor: pointer;
+  border: 2px solid transparent; background: var(--surface-3);
+  position: relative;
+  transition: border-color .14s, transform .14s var(--ease);
+}
+.album__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.album__thumb:hover { transform: scale(1.04); }
+.album__thumb.is-active { border-color: var(--brand); }
+.album__thumb .media__ph { font-size: .95rem; color: var(--muted); }
+.album__nav {
+  flex: none; width: 34px; height: 34px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: var(--r); border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--text-2);
+  font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.album__nav:hover:not(:disabled) { border-color: var(--brand); color: var(--brand-ink); }
+.album__nav:disabled { opacity: .35; cursor: not-allowed; }
+.album__count { flex: none; font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 
 .badge {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1152,7 +1242,8 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
 @media (max-width: 379px) {
   .row-2 { grid-template-columns: minmax(0, 1fr); }
-  .form-actions .btn--ghost { width: 68px; padding-inline: 0; }
+  .form-actions .btn--ghost { padding-inline: 10px; font-size: .84rem; }
+  .form-actions { gap: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1333,26 +1424,43 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
         </div>
 
         <form id="recordForm" novalidate autocomplete="off">
-          <div class="field">
-            <span class="lbl">หลักฐานประกอบ <span class="opt">(ไม่บังคับ)</span></span>
-            <div class="drop" id="dropzone" role="button" tabindex="0" aria-describedby="dropHint">
-              <span class="drop__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.2 21H6.931c-.605 0-.908 0-1.049-.12a.5.5 0 0 1-.173-.42c.014-.183.228-.397.657-.826l8.503-8.503c.396-.396.594-.594.822-.668a1 1 0 0 1 .618 0c.228.074.426.272.822.668L21 15v1.2M16.2 21c1.68 0 2.52 0 3.162-.327a3 3 0 0 0 1.311-1.311C21 18.72 21 17.88 21 16.2M16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V7.8c0-1.68 0-2.52.327-3.162a3 3 0 0 1 1.311-1.311C5.28 3 6.12 3 7.8 3h8.4c1.68 0 2.52 0 3.162.327a3 3 0 0 1 1.311 1.311C21 5.28 21 6.12 21 7.8v8.4M10.5 8.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg></span>
-              <span class="drop__title">ลากไฟล์มาวาง หรือ <span class="link">เลือกจากเครื่อง</span></span>
-              <span class="drop__hint" id="dropHint">รูปภาพ / วิดีโอ · สูงสุด 25 MB</span>
-            </div>
-            <input type="file" id="fileInput" accept="image/*,video/*" hidden>
-            <div class="filecard" id="fileCard" hidden>
-              <div class="filecard__thumb" id="fileThumb"></div>
-              <div class="filecard__meta">
-                <strong id="fileName">—</strong>
-                <span id="fileSize">—</span>
-              </div>
-              <button type="button" class="icon-btn" id="changeFileBtn" aria-label="เปลี่ยนไฟล์" title="เปลี่ยนไฟล์"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10s-2.005-2.732-3.634-4.362a9 9 0 1 0 2.282 8.862M21 10V4m0 6h-6"/></svg></button>
-              <button type="button" class="icon-btn" id="removeFileBtn" aria-label="ลบไฟล์" title="ลบไฟล์"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-            </div>
+          <!-- ===== แท็บขั้นตอน ===== -->
+          <div class="steps" role="tablist" aria-label="ขั้นตอนการกรอกข้อมูล">
+            <button type="button" class="step is-active" role="tab" data-step="1" aria-selected="true" aria-controls="stepPanel1">
+              <span class="step__no" aria-hidden="true">1</span><span class="step__tx">หลักฐาน</span>
+            </button>
+            <button type="button" class="step" role="tab" data-step="2" aria-selected="false" aria-controls="stepPanel2">
+              <span class="step__no" aria-hidden="true">2</span><span class="step__tx">ยานพาหนะ</span>
+            </button>
+            <button type="button" class="step" role="tab" data-step="3" aria-selected="false" aria-controls="stepPanel3">
+              <span class="step__no" aria-hidden="true">3</span><span class="step__tx">รายละเอียด</span>
+            </button>
           </div>
 
-          <div class="row-2">
+          <!-- ===== STEP 1 : หลักฐาน ===== -->
+          <div class="step-panel" id="stepPanel1" data-step-panel="1" role="tabpanel" aria-labelledby="stepTab1">
+            <div class="field">
+              <span class="lbl">หลักฐานประกอบ <span class="opt">(ไม่บังคับ)</span></span>
+              <div class="drop" id="dropzone" role="button" tabindex="0" aria-describedby="dropHint">
+                <span class="drop__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.2 21H6.931c-.605 0-.908 0-1.049-.12a.5.5 0 0 1-.173-.42c.014-.183.228-.397.657-.826l8.503-8.503c.396-.396.594-.594.822-.668a1 1 0 0 1 .618 0c.228.074.426.272.822.668L21 15v1.2M16.2 21c1.68 0 2.52 0 3.162-.327a3 3 0 0 0 1.311-1.311C21 18.72 21 17.88 21 16.2M16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V7.8c0-1.68 0-2.52.327-3.162a3 3 0 0 1 1.311-1.311C5.28 3 6.12 3 7.8 3h8.4c1.68 0 2.52 0 3.162.327a3 3 0 0 1 1.311 1.311C21 5.28 21 6.12 21 7.8v8.4M10.5 8.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg></span>
+                <span class="drop__title">ลากไฟล์มาวาง หรือ <span class="link">เลือกจากเครื่อง</span></span>
+                <span class="drop__hint" id="dropHint">รูปภาพ / วิดีโอ · สูงสุด 25 MB</span>
+              </div>
+              <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+              <div class="filecard" id="fileCard" hidden>
+                <div class="filecard__thumb" id="fileThumb"></div>
+                <div class="filecard__meta">
+                  <strong id="fileName">—</strong>
+                  <span id="fileSize">—</span>
+                </div>
+                <button type="button" class="icon-btn" id="changeFileBtn" aria-label="เปลี่ยนไฟล์" title="เปลี่ยนไฟล์"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10s-2.005-2.732-3.634-4.362a9 9 0 1 0 2.282 8.862M21 10V4m0 6h-6"/></svg></button>
+                <button type="button" class="icon-btn" id="removeFileBtn" aria-label="ลบไฟล์" title="ลบไฟล์"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+              </div>
+              <div class="album album--form" id="formAlbum" hidden>
+                <div class="album__strip" id="formAlbumStrip" aria-label="หลักฐานทั้งหมดของเคสนี้"></div>
+              </div>
+            </div>
+
             <div class="field">
               <label class="lbl" for="fileTypeSel">ประเภทไฟล์</label>
               <select class="select" id="fileTypeSel">
@@ -1360,57 +1468,75 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
                 <option value="VIDEO">วิดีโอ</option>
               </select>
             </div>
+          </div>
+
+          <!-- ===== STEP 2 : ยานพาหนะ ===== -->
+          <div class="step-panel" id="stepPanel2" data-step-panel="2" role="tabpanel" aria-labelledby="stepTab2" hidden>
             <div class="field">
               <label class="lbl" for="plateInput">ทะเบียนและจังหวัด <span class="req">*</span></label>
               <input class="input" id="plateInput" type="text" inputmode="text" enterkeyhint="next"
                      placeholder="ขท 2338 กรุงเทพมหานคร" required aria-required="true">
               <p class="err" data-err="plateInput" role="alert"></p>
             </div>
-          </div>
 
-          <div class="field">
-            <label class="lbl" for="vehicleSel">ประเภทรถ <span class="req">*</span></label>
-            <select class="select" id="vehicleSel" required aria-required="true">
-              <option value="">— เลือกประเภทรถ —</option>
-            </select>
-            <p class="err" data-err="vehicleSel" role="alert"></p>
-          </div>
-
-          <div class="field">
-            <label class="lbl" for="offenseSel">ข้อกล่าวหา / ความผิด <span class="req">*</span></label>
-            <select class="select" id="offenseSel" required aria-required="true" disabled>
-              <option value="">เลือกประเภทรถก่อน</option>
-            </select>
-            <p class="err" data-err="offenseSel" role="alert"></p>
-
-            <div class="subfield" id="customOffenseField" hidden>
-              <label class="lbl" for="customOffenseInput">พิมพ์ข้อกล่าวหาใหม่ <span class="req">*</span></label>
-              <input class="input" id="customOffenseInput" type="text" maxlength="120"
-                     placeholder="เช่น ขับรถย้อนศร, แซงในที่ห้ามแซง" autocomplete="off"
-                     enterkeyhint="done">
-              <p class="err" data-err="customOffenseInput" role="alert"></p>
+            <div class="field">
+              <label class="lbl" for="vehicleSel">ประเภทรถ <span class="req">*</span></label>
+              <select class="select" id="vehicleSel" required aria-required="true">
+                <option value="">— เลือกประเภทรถ —</option>
+              </select>
+              <p class="err" data-err="vehicleSel" role="alert"></p>
             </div>
           </div>
 
-          <div class="field">
-            <label class="lbl" for="addressInput">สถานที่ / พิกัด</label>
-            <input class="input" id="addressInput" type="text" enterkeyhint="done"
-                   placeholder="เช่น ถนนวิภาวดี หน้าจตุจักร">
-          </div>
+          <!-- ===== STEP 3 : รายละเอียด ===== -->
+          <div class="step-panel" id="stepPanel3" data-step-panel="3" role="tabpanel" aria-labelledby="stepTab3" hidden>
+            <div class="field">
+              <label class="lbl" for="offenseSel">ข้อกล่าวหา / ความผิด <span class="req">*</span></label>
+              <select class="select" id="offenseSel" required aria-required="true" disabled>
+                <option value="">เลือกประเภทรถก่อน</option>
+              </select>
+              <p class="err" data-err="offenseSel" role="alert"></p>
 
-          <div class="field" id="statusField" hidden>
-            <label class="lbl" for="statusSel">สถานะเคส</label>
-            <select class="select" id="statusSel">
-              <option value="Ready to Submit">พร้อมส่ง</option>
-              <option value="Pending">รอดำเนินการ</option>
-              <option value="ส่งจราจรแล้ว">ส่งจราจรแล้ว</option>
-            </select>
+              <div class="subfield" id="customOffenseField" hidden>
+                <label class="lbl" for="customOffenseInput">พิมพ์ข้อกล่าวหาใหม่ <span class="req">*</span></label>
+                <input class="input" id="customOffenseInput" type="text" maxlength="120"
+                       placeholder="เช่น ขับรถย้อนศร, แซงในที่ห้ามแซง" autocomplete="off"
+                       enterkeyhint="done">
+                <p class="err" data-err="customOffenseInput" role="alert"></p>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="lbl" for="addressInput">สถานที่ / พิกัด</label>
+              <input class="input" id="addressInput" type="text" enterkeyhint="done"
+                     placeholder="เช่น ถนนวิภาวดี หน้าจตุจักร">
+            </div>
+
+            <div class="field" id="statusField" hidden>
+              <label class="lbl" for="statusSel">สถานะเคส</label>
+              <select class="select" id="statusSel">
+                <option value="Ready to Submit">พร้อมส่ง</option>
+                <option value="Pending Plate">รอเลขทะเบียน (จาก LINE)</option>
+                <option value="Pending Vehicle">รอประเภทยานพาหนะ (จาก LINE)</option>
+                <option value="Pending Offense">รอข้อกล่าวหา (จาก LINE)</option>
+                <option value="Pending Location">รอพิกัด (จาก LINE)</option>
+                <option value="Pending">รอดำเนินการ</option>
+                <option value="ส่งจราจรแล้ว">ส่งจราจรแล้ว</option>
+                <option value="Cancelled">ยกเลิก</option>
+              </select>
+            </div>
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn--primary btn--block" id="submitBtn">
+            <button type="button" class="btn btn--ghost" id="stepPrevBtn" hidden>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg> ย้อนกลับ
+            </button>
+            <button type="submit" class="btn btn--primary" id="submitBtn" hidden>
               <span class="spinner" id="submitSpin" hidden aria-hidden="true"></span>
               <span id="submitLabel"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v3.4c0 .56 0 .84.109 1.054a1 1 0 0 0 .437.437C7.76 8 8.04 8 8.6 8h6.8c.56 0 .84 0 1.054-.109a1 1 0 0 0 .437-.437C17 7.24 17 6.96 17 6.4V4m0 17v-6.4c0-.56 0-.84-.109-1.054a1 1 0 0 0-.437-.437C16.24 13 15.96 13 15.4 13H8.6c-.56 0-.84 0-1.054.109a1 1 0 0 0-.437.437C7 13.76 7 14.04 7 14.6V21M21 9.325V16.2c0 1.68 0 2.52-.327 3.162a3 3 0 0 1-1.311 1.311C18.72 21 17.88 21 16.2 21H7.8c-1.68 0-2.52 0-3.162-.327a3 3 0 0 1-1.311-1.311C3 18.72 3 17.88 3 16.2V7.8c0-1.68 0-2.52.327-3.162a3 3 0 0 1 1.311-1.311C5.28 3 6.12 3 7.8 3h6.875c.489 0 .733 0 .963.055.204.05.4.13.579.24.201.123.374.296.72.642l3.126 3.126c.346.346.519.519.642.72.11.18.19.374.24.579.055.23.055.474.055.963Z"/></svg> บันทึกเคสใหม่</span>
+            </button>
+            <button type="button" class="btn btn--primary" id="stepNextBtn">ถัดไป
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
             <button type="button" class="btn btn--ghost" id="resetBtn" title="ล้างข้อมูลในฟอร์ม">ล้าง</button>
           </div>
@@ -1489,12 +1615,22 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   <div class="modal__body">
     <div class="modal__head">
       <strong id="mediaTitle">หลักฐานประกอบ</strong>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="albumActions" style="display:none;gap:6px">
+          <button type="button" class="btn btn--ghost btn--sm" id="albumCoverBtn" title="ย้ายรูปนี้เป็นรูปแรก (ปก)">ตั้งเป็นปก</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="albumDelBtn" title="ลบรูปนี้ออกจากเคส">ลบรูปนี้</button>
+        </span>
         <a class="btn btn--ghost btn--sm" id="mediaOpenLink" href="#" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>
         <button type="button" class="icon-btn" id="mediaClose" aria-label="ปิดหน้าต่างดูหลักฐาน" style="width:34px;height:34px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
     </div>
     <div class="modal__stage" id="mediaStage"></div>
+    <div class="album" id="albumBar" hidden>
+      <button type="button" class="album__nav" id="albumPrev" aria-label="รูปก่อนหน้า">‹</button>
+      <div class="album__strip" id="albumStrip" role="tablist" aria-label="รายการหลักฐาน"></div>
+      <span class="album__count" id="albumCount"></span>
+      <button type="button" class="album__nav" id="albumNext" aria-label="รูปถัดไป">›</button>
+    </div>
   </div>
 </div>
 
@@ -1536,8 +1672,17 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   /* =========================================================
      CONFIG
      ========================================================= */
-  // ⚠️ ใส่ Web App URL ของ Google Apps Script ที่นี่
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbybGe_uL_fEC_8JX4va2-S4CvlbX0NAN1JQKh5YNViTEQALuTYVpHuCNKkWxj2ZoNVs/exec';
+  /**
+   * API base — ต้องเป็น Cloudflare Worker ตัวเดียวกับที่ใช้รับ webhook LINE
+   * เพราะ Apps Script ตอบ 302 + ไม่มี CORS header ถ้าเรียกตรงจากเบราว์เซอร์
+   * Worker จะตาม redirect ให้และเติม CORS header กลับมา
+   *
+   *   GET  <API>/api?action=getData
+   *   POST <API>/api   body = {action, payload}
+   *
+   * ถ้าจะเปลี่ยน Worker ให้แก้ทั้งบรรทัดนี้ (ลงท้าย /api เสมอ)
+   */
+  const GAS_URL = 'https://line-gas-proxy.na-adisak.workers.dev/api';
 
   // ชื่อ action ฝั่ง Apps Script (แก้ตรงนี้ถ้า backend ใช้ชื่ออื่น)
   const ACTIONS = {
@@ -1606,6 +1751,17 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   }
   function str(value) {
     return value === null || value === undefined ? '' : String(value).trim();
+  }
+
+  /** แยกเซลล์ที่เก็บหลาย URL (คั่นด้วยขึ้นบรรทัดใหม่/จุลภาค) ออกเป็น array (ตัดซ้ำ) */
+  function splitUrls(value) {
+    let list;
+    if (Array.isArray(value)) list = value.map((v) => str(v)).filter(Boolean);
+    else {
+      const text = str(value);
+      list = text ? text.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean) : [];
+    }
+    return list.filter((u, i) => list.indexOf(u) === i);
   }
   const ICON = {
     copy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15c-.932 0-1.398 0-1.765-.152a2 2 0 0 1-1.083-1.083C2 13.398 2 12.932 2 12V5.2c0-1.12 0-1.68.218-2.108a2 2 0 0 1 .874-.874C3.52 2 4.08 2 5.2 2H12c.932 0 1.398 0 1.765.152a2 2 0 0 1 1.083 1.083C15 3.602 15 4.068 15 5m-2.8 17h6.6c1.12 0 1.68 0 2.108-.218a2 2 0 0 0 .874-.874C22 20.48 22 19.92 22 18.8v-6.6c0-1.12 0-1.68-.218-2.108a2 2 0 0 0-.874-.874C20.48 9 19.92 9 18.8 9h-6.6c-1.12 0-1.68 0-2.108.218a2 2 0 0 0-.874.874C9 10.52 9 11.08 9 12.2v6.6c0 1.12 0 1.68.218 2.108a2 2 0 0 0 .874.874C10.52 22 11.08 22 12.2 22Z"/></svg>',
@@ -1748,6 +1904,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     const rowIndex = (o.rowIndex !== undefined && o.rowIndex !== null && o.rowIndex !== '')
       ? o.rowIndex
       : (o.row !== undefined && o.row !== null ? o.row : null);
+    const urls = splitUrls(o.fileUrls && o.fileUrls.length ? o.fileUrls : o.fileUrl);
     return {
       key: plate + '#' + timestamp + '#' + index,
       rowIndex: rowIndex,
@@ -1758,7 +1915,8 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       offense: str(o.offense || o.violation),
       address: str(o.address || o.location),
       status: str(o.status),
-      fileUrl: str(o.fileUrl || o.fileURL || o.url),
+      fileUrl: urls[0] || str(o.fileUrl || o.fileURL || o.url),
+      fileUrls: urls,
       fileType: str(o.fileType || o.type).toUpperCase(),
       lat: (o.lat === 0 || o.lat) ? o.lat : '',
       lng: (o.lng === 0 || o.lng) ? o.lng : '',
@@ -1824,6 +1982,53 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   const keypad = $('#keypad');
 
   let draft = null;
+
+  /* =========================================================
+     FORM STEPS (แท็บ 1-2-3)
+     ========================================================= */
+  const stepTabs = $$('.step[data-step]');
+  const stepPanels = $$('.step-panel[data-step-panel]');
+  const stepPrevBtn = $('#stepPrevBtn');
+  const stepNextBtn = $('#stepNextBtn');
+  let formStep = 1;
+
+  function showStep(n, focusFirst) {
+    formStep = Math.min(3, Math.max(1, Number(n) || 1));
+
+    stepTabs.forEach((tab) => {
+      const active = Number(tab.dataset.step) === formStep;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      tab.tabIndex = active ? 0 : -1;
+    });
+
+    stepPanels.forEach((panel) => {
+      const active = Number(panel.dataset.stepPanel) === formStep;
+      panel.hidden = !active;
+      panel.classList.toggle('is-active', active);
+    });
+
+    stepPrevBtn.hidden = formStep === 1;
+    stepNextBtn.hidden = formStep === 3;
+    submitBtn.hidden = formStep !== 3;
+
+    try { formPanel.scrollTop = 0; } catch (e) {}
+
+    if (focusFirst) {
+      const panel = stepPanels[formStep - 1];
+      const el = panel && panel.querySelector('input:not([type="hidden"]), select');
+      if (el) {
+        try { el.focus({ preventScroll: true }); } catch (err) {}
+      }
+    }
+  }
+
+  stepTabs.forEach((tab) => {
+    tab.addEventListener('click', () => showStep(tab.dataset.step));
+  });
+  stepNextBtn.addEventListener('click', () => showStep(formStep + 1, true));
+  stepPrevBtn.addEventListener('click', () => showStep(formStep - 1, true));
+  showStep(1);
 
   /* =========================================================
      NETWORK
@@ -2108,6 +2313,10 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     fileCard.hidden = true;
     dropzone.hidden = false;
     fileThumb.innerHTML = '';
+    const bar = $('#formAlbum');
+    if (bar) { bar.hidden = true; }
+    const strip = $('#formAlbumStrip');
+    if (strip) { strip.innerHTML = ''; }
   }
 
   function clearFile() {
@@ -2118,8 +2327,8 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     state.file = null;
     state.fileUrl = '';
     fileInput.value = '';
-    state.existing = (state.editing && state.editing.fileUrl)
-      ? { url: state.editing.fileUrl, type: state.editing.fileType }
+    state.existing = (state.editing && recordUrls(state.editing).length)
+      ? { urls: recordUrls(state.editing), type: state.editing.fileType }
       : null;
     renderFilePreview();
   }
@@ -2129,6 +2338,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       fileCard.hidden = true;
       dropzone.hidden = false;
       fileThumb.innerHTML = '';
+      renderFormAlbum();
       return;
     }
 
@@ -2145,17 +2355,46 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       fileTypeSel.value = isImage ? 'IMAGE' : 'VIDEO';
       removeFileBtn.hidden = false;
     } else {
-      const thumb = previewThumb({ fileUrl: state.existing.url, fileType: state.existing.type });
-      fileThumb.innerHTML = thumb
+      const first = state.existing.urls[0];
+      const thumb = thumbUrlFor(first) || '';
+      const more = state.existing.urls.length > 1
+        ? '<span class="media__count" aria-hidden="true">' + state.existing.urls.length + '</span>'
+        : '';
+      fileThumb.innerHTML = (thumb
         ? '<img src="' + esc(thumb) + '" alt="" onerror="this.remove()">'
         : '<span style="font-size:1.25rem" aria-hidden="true">' +
-          (state.existing.type === 'VIDEO' ? ICON.videoLg : ICON.imageLg) + '</span>';
+          (state.existing.type === 'VIDEO' ? ICON.videoLg : ICON.imageLg) + '</span>') + more;
       fileName.textContent = 'หลักฐานเดิมที่แนบไว้';
-      fileSize.textContent = 'กดปุ่มเพื่อเปลี่ยนเป็นไฟล์ใหม่';
+      fileSize.textContent = state.existing.urls.length > 1
+        ? state.existing.urls.length + ' รายการ · แตะรูปเพื่อดูทั้งหมด'
+        : 'กดปุ่มเพื่อเปลี่ยนเป็นไฟล์ใหม่';
       fileTypeSel.value = state.existing.type === 'VIDEO' ? 'VIDEO' : 'IMAGE';
       removeFileBtn.hidden = true;
     }
     changeFileBtn.hidden = false;
+    renderFormAlbum();
+  }
+
+  /** แถบรูปทั้งหมดของเคสที่กำลังแก้ไข (แตะเพื่อเปิด album) */
+  function renderFormAlbum() {
+    const bar = $('#formAlbum');
+    const strip = $('#formAlbumStrip');
+    const urls = (state.existing && state.existing.urls) ? state.existing.urls : [];
+    if (urls.length < 2) {
+      bar.hidden = true;
+      strip.innerHTML = '';
+      return;
+    }
+    bar.hidden = false;
+    strip.innerHTML = urls.map((u, i) => {
+      const t = thumbUrlFor(u);
+      return '<button type="button" class="album__thumb" data-form-preview="' + i +
+        '" aria-label="ดูหลักฐานที่ ' + (i + 1) + '">' +
+        (t
+          ? '<img src="' + esc(t) + '" alt="" loading="lazy" onerror="this.remove()">'
+          : '<span class="media__ph" aria-hidden="true">' + ICON.imageLg + '</span>') +
+        '</button>';
+    }).join('');
   }
 
   function setFile(file) {
@@ -2193,6 +2432,18 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     }
   });
   $('#changeFileBtn').addEventListener('click', () => fileInput.click());
+  $('#formAlbumStrip').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-form-preview]');
+    if (!btn) return;
+    const urls = (state.existing && state.existing.urls) || [];
+    if (!urls.length) return;
+    openAlbum(
+      urls,
+      (state.existing && state.existing.type) || '',
+      Number(btn.dataset.formPreview) || 0,
+      state.editing ? state.editing.rowIndex : null
+    );
+  });
   $('#removeFileBtn').addEventListener('click', () => {
     clearFile();
     notify('info', 'ลบไฟล์แล้ว', 'ยังสามารถบันทึกเคสโดยไม่มีหลักฐานได้');
@@ -2327,6 +2578,9 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     }
 
     if (firstInvalid) {
+      // กระโดดไปแท็บที่มีช่องนั้นก่อน แล้วค่อยโฟกัส
+      const panel = firstInvalid.closest('[data-step-panel]');
+      if (panel) showStep(panel.dataset.stepPanel);
       firstInvalid.focus({ preventScroll: true });
       firstInvalid.scrollIntoView({ block: 'center', behavior: 'smooth' });
       notify('warn', 'ข้อมูลยังไม่ครบ', 'กรุณากรอกช่องที่มีเครื่องหมาย * ให้ครบถ้วน');
@@ -2435,10 +2689,12 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
     state.editing = record;
     resetMedia();
-    state.existing = record.fileUrl ? { url: record.fileUrl, type: record.fileType } : null;
+    const existingUrls = recordUrls(record);
+    state.existing = existingUrls.length ? { urls: existingUrls, type: record.fileType } : null;
     fillFormFromRecord(record);
     renderFilePreview();
     applyFormMode();
+    showStep(1);
     [plateInput, vehicleSel, offenseSel].forEach((el) => setFieldError(el, ''));
     draftBar.hidden = true;
     render();
@@ -2461,6 +2717,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     draftBar.hidden = true;
     checkDraft();
     applyFormMode();
+    showStep(1);
     render();
     if (!silent) notify('info', 'ยกเลิกการแก้ไขแล้ว', '');
   }
@@ -2656,7 +2913,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
         payload.fileMimeType = state.file.type || 'application/octet-stream';
         payload.fileData = await fileToDataURL(state.file);
       } else if (isEdit && state.existing) {
-        payload.fileUrl = state.existing.url;
+        payload.fileUrl = state.existing.urls[0];
       }
 
       if (isEdit) {
@@ -2731,6 +2988,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     clearFormFields();
     discardDraft();
     applyFormMode();
+    showStep(1);
   }
 
   resetBtn.addEventListener('click', () => {
@@ -2743,6 +3001,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
   function openNewCase() {
     if (state.editing) cancelEdit(true);
+    showStep(1);
     openSheet();
   }
 
@@ -2845,38 +3104,95 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   }
 
   function previewThumb(r) {
-    if (!r.fileUrl) return '';
-    const id = driveId(r.fileUrl);
+    const first = (r.fileUrls && r.fileUrls.length ? r.fileUrls[0] : '') || r.fileUrl;
+    if (!first) return '';
+    const id = driveId(first);
     if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
-    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(r.fileUrl)) return r.fileUrl;
-    if (r.fileType === 'IMAGE' && /^https?:/i.test(r.fileUrl) && !/\.(mp4|mov|webm|avi)(\?|#|$)/i.test(r.fileUrl)) {
-      return r.fileUrl;
+    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(first)) return first;
+    if (r.fileType === 'IMAGE' && /^https?:/i.test(first) && !/\.(mp4|mov|webm|avi)(\?|#|$)/i.test(first)) {
+      return first;
     }
     return '';
   }
 
+  function recordUrls(r) {
+    if (r.fileUrls && r.fileUrls.length) return r.fileUrls;
+    return splitUrls(r.fileUrl);
+  }
+
   function mediaButton(r, compact) {
-    if (!r.fileUrl) return compact ? '' : '<span class="dim">—</span>';
+    const urls = recordUrls(r);
+    if (!urls.length) return compact ? '' : '<span class="dim">—</span>';
 
     const thumb = previewThumb(r);
-    const isVideo = r.fileType === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(r.fileUrl);
+    const isVideo = r.fileType === 'VIDEO' || /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(urls[0]);
     const kind = thumb ? 'image' : (isVideo ? 'video' : 'file');
+    const more = urls.length > 1
+      ? '<span class="media__count" aria-hidden="true">' + urls.length + '</span>'
+      : '';
+    const label = 'เปิดหลักฐาน' + (urls.length > 1 ? ' (' + urls.length + ' รายการ)' : '');
 
-    return '<button type="button" class="media" data-act="preview" data-url="' + esc(r.fileUrl) +
-      '" data-kind="' + kind + '" title="เปิดหลักฐาน" aria-label="เปิดหลักฐาน">' +
+    return '<button type="button" class="media" data-act="preview" data-urls="' +
+      esc(JSON.stringify(urls)) + '" data-kind="' + kind + '" data-row="' + esc(r.rowIndex) +
+      '" title="' + label + '" aria-label="' + label + '">' +
       (thumb
         ? '<img class="media__img" src="' + esc(thumb) + '" alt="" loading="lazy" ' +
           'onerror="this.parentNode.classList.add(\'media--fallback\');this.remove()">'
         : '') +
       '<span class="media__ph" aria-hidden="true">' + (isVideo ? ICON.videoLg : ICON.imageLg) + '</span>' +
+      more +
       '</button>';
   }
 
-  function openMedia(url, kind) {
-    if (!url) return;
-    $('#mediaTitle').textContent = kind === 'video' ? 'หลักฐานวิดีโอ' : 'หลักฐานรูปภาพ';
+  /* ---------- album: เคสเดียวมีได้หลายหลักฐาน ---------- */
+  const album = { urls: [], type: '', index: 0, rowIndex: null };
+
+  function openAlbum(urls, type, start, rowIndex) {
+    const list = splitUrls(urls);
+    if (!list.length) return;
+    album.urls = list;
+    album.type = type || '';
+    album.index = Math.min(Math.max(0, start || 0), list.length - 1);
+    album.rowIndex = (rowIndex === 0 || rowIndex) ? rowIndex : null;
+    modal.classList.add('is-open');
+    syncLock();
+    renderAlbum();
+    $('#mediaClose').focus();
+  }
+
+  function albumKind(url) {
+    if (driveId(url)) return 'drive';
+    if (/\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(url) || album.type === 'VIDEO') return 'video';
+    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(url)) return 'image';
+    return 'file';
+  }
+
+  function thumbUrlFor(url) {
+    const id = driveId(url);
+    if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w200';
+    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(url)) return url;
+    return '';
+  }
+
+  function renderAlbum() {
+    const urls = album.urls;
+    const index = album.index;
+    const url = urls[index];
+    const kind = albumKind(url);
+
+    $('#mediaTitle').textContent = (album.type === 'VIDEO' ? 'หลักฐานวิดีโอ' : 'หลักฐานรูปภาพ') +
+      (urls.length > 1 ? ' · ' + (index + 1) + '/' + urls.length : '');
     $('#mediaOpenLink').href = url;
     modalStage.innerHTML = '';
+
+    // ปุ่มจัดการหลักฐาน (แสดงเฉพาะเมื่อรู้ rowIndex ของเคส)
+    const actions = $('#albumActions');
+    if (album.rowIndex) {
+      actions.style.display = 'inline-flex';
+      $('#albumCoverBtn').disabled = index === 0;
+    } else {
+      actions.style.display = 'none';
+    }
 
     const id = driveId(url);
     if (id) {
@@ -2903,23 +3219,113 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       img.src = url;
       modalStage.appendChild(img);
     } else {
-      window.open(url, '_blank', 'noopener');
-      return;
+      modalStage.innerHTML = '<div class="media-fail">ไฟล์นี้แสดงตัวอย่างไม่ได้' +
+        '<br><a class="btn btn--primary" href="' + esc(url) + '" target="_blank" rel="noopener">เปิดในแท็บใหม่</a></div>';
     }
 
-    modal.classList.add('is-open');
-    syncLock();
-    $('#mediaClose').focus();
+    const bar = $('#albumBar');
+    const strip = $('#albumStrip');
+    if (urls.length > 1) {
+      bar.hidden = false;
+      strip.innerHTML = urls.map((u, i) => {
+        const t = thumbUrlFor(u);
+        return '<button type="button" class="album__thumb' + (i === index ? ' is-active' : '') +
+          '" role="tab" aria-selected="' + (i === index ? 'true' : 'false') +
+          '" data-index="' + i + '" aria-label="หลักฐานที่ ' + (i + 1) + '">' +
+          (t
+            ? '<img src="' + esc(t) + '" alt="" loading="lazy" onerror="this.remove()">'
+            : '<span class="media__ph" aria-hidden="true">' + ICON.imageLg + '</span>') +
+          '</button>';
+      }).join('');
+      $('#albumCount').textContent = (index + 1) + '/' + urls.length;
+      $('#albumPrev').disabled = index === 0;
+      $('#albumNext').disabled = index === urls.length - 1;
+    } else {
+      bar.hidden = true;
+      strip.innerHTML = '';
+    }
+  }
+
+  function albumStep(delta) {
+    const next = album.index + delta;
+    if (next < 0 || next >= album.urls.length) return;
+    album.index = next;
+    renderAlbum();
   }
 
   function closeMedia() {
     modal.classList.remove('is-open');
     modalStage.innerHTML = '';
+    $('#albumBar').hidden = true;
+    album.urls = [];
+    album.rowIndex = null;
     syncLock();
   }
 
   $('#mediaClose').addEventListener('click', closeMedia);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeMedia(); });
+  $('#albumPrev').addEventListener('click', () => albumStep(-1));
+  $('#albumNext').addEventListener('click', () => albumStep(1));
+  $('#albumStrip').addEventListener('click', (e) => {
+    const thumb = e.target.closest('.album__thumb');
+    if (!thumb) return;
+    album.index = Number(thumb.dataset.index) || 0;
+    renderAlbum();
+  });
+
+  /** หลังลบ/สลับรูป: โหลดใหม่แล้วอัปเดตฟอร์มแก้ไขให้ตรง */
+  async function refreshEvidence(rowIndex) {
+    await loadData({ silent: true });
+    const rec = state.records.filter((r) => String(r.rowIndex) === String(rowIndex))[0] || null;
+    if (rec && state.editing) {
+      state.editing = rec;
+      state.existing = rec.fileUrls.length
+        ? { urls: rec.fileUrls, type: rec.fileType }
+        : null;
+      renderFilePreview();
+    }
+    return rec;
+  }
+
+  $('#albumCoverBtn').addEventListener('click', async () => {
+    const rowIndex = album.rowIndex;
+    const url = album.urls[album.index];
+    if (!rowIndex || !url || album.index === 0) return;
+    try {
+      await sendRecord({ action: 'setCover', rowIndex: rowIndex, payload: { rowIndex: rowIndex, url: url } });
+      const rec = await refreshEvidence(rowIndex);
+      if (rec) {
+        album.urls = rec.fileUrls;
+        album.index = 0;
+        renderAlbum();
+      }
+      notify('ok', 'ตั้งเป็นรูปปกแล้ว', 'รูปนี้จะแสดงในตาราง');
+    } catch (err) {
+      notify('err', 'ตั้งรูปปกไม่สำเร็จ', (err && err.message) || 'ลองอีกครั้ง');
+    }
+  });
+
+  $('#albumDelBtn').addEventListener('click', async () => {
+    const rowIndex = album.rowIndex;
+    const url = album.urls[album.index];
+    if (!rowIndex || !url) return;
+    if (!window.confirm('ลบรูปนี้ออกจากเคส?\n(ไฟล์ต้นฉบับใน Drive ยังอยู่)')) return;
+    try {
+      await sendRecord({ action: 'removeFile', rowIndex: rowIndex, payload: { rowIndex: rowIndex, url: url } });
+      const rec = await refreshEvidence(rowIndex);
+      if (!rec || !rec.fileUrls.length) {
+        closeMedia();
+        notify('ok', 'ลบรูปแล้ว', 'เคสนี้ไม่มีหลักฐานเหลือ');
+        return;
+      }
+      album.urls = rec.fileUrls;
+      album.index = Math.min(album.index, rec.fileUrls.length - 1);
+      renderAlbum();
+      notify('ok', 'ลบรูปแล้ว', 'เหลือ ' + rec.fileUrls.length + ' รูป');
+    } catch (err) {
+      notify('err', 'ลบรูปไม่สำเร็จ', (err && err.message) || 'ลองอีกครั้ง');
+    }
+  });
 
   /* =========================================================
      RENDER
@@ -3192,7 +3598,11 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     if (act === 'copy') {
       copyText(target.dataset.value);
     } else if (act === 'preview') {
-      openMedia(target.dataset.url, target.dataset.kind);
+      let urls = [];
+      try { urls = JSON.parse(target.dataset.urls || '[]') || []; } catch (err) { urls = []; }
+      const type = target.dataset.kind === 'video' ? 'VIDEO' : '';
+      const row = target.dataset.row ? Number(target.dataset.row) : null;
+      openAlbum(urls.length ? urls : [target.dataset.url], type, 0, row);
     } else if (act === 'edit') {
       startEdit(target.dataset.key);
     } else if (act === 'delete') {
@@ -3534,6 +3944,12 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   document.addEventListener('keydown', (e) => {
     if (loginActive()) return; // หน้าล็อกจัดการแป้นพิมพ์เอง
 
+    // album: เลื่อนรูปด้วยลูกศร
+    if (modal.classList.contains('is-open') && album.urls.length > 1) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); albumStep(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); albumStep(1); return; }
+    }
+
     if (e.key === 'Escape') {
       if (modal.classList.contains('is-open')) { closeMedia(); return; }
       if (confirmModal.classList.contains('is-open')) { closeConfirm(); return; }
@@ -3589,6 +4005,17 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
   init();
 })();
+</script>
+
+<script>
+  /* PWA: ลง service worker เพื่อติดตั้งเป็นแอป + เปิดได้ตอนเน็ตหลุด */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () {
+        /* ลงไม่ได้ (เช่น เปิดผ่าน file://) — ไม่เป็นไร แอปยังทำงานปกติ */
+      });
+    });
+  }
 </script>
 </body>
 </html>
