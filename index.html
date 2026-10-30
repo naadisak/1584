@@ -1684,6 +1684,29 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
    */
   const GAS_URL = 'https://line-gas-proxy.na-adisak.workers.dev/api';
 
+  /* ---------- access key ----------
+     เก็บเฉพาะใน localStorage ของเครื่องนี้ ไม่เคยอยู่ใน repo
+     ต้องตั้ง DASHBOARD_KEY ฝั่ง Apps Script ให้ตรงกัน (ถ้าไม่ตั้ง ระบบทำงานแบบไม่ต้องใช้รหัส) */
+  const KEY_STORE = 'tic.accessKey';
+
+  function getKey() {
+    try { return localStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; }
+  }
+  function setKey(value) {
+    try { localStorage.setItem(KEY_STORE, value); } catch (e) {}
+  }
+  function isUnauthorized(json) {
+    return !!(json && typeof json.error === 'string' && json.error.indexOf('unauthorized') === 0);
+  }
+  function apiUrl(query) {
+    const parts = [];
+    if (query) parts.push(query);
+    const k = getKey();
+    if (k) parts.push('key=' + encodeURIComponent(k));
+    parts.push('t=' + Date.now());
+    return GAS_URL + '?' + parts.join('&');
+  }
+
   // ชื่อ action ฝั่ง Apps Script (แก้ตรงนี้ถ้า backend ใช้ชื่ออื่น)
   const ACTIONS = {
     config: 'getConfig',
@@ -2067,8 +2090,16 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       if (!res.ok) throw new Error('เซิร์ฟเวอร์ตอบกลับ ' + res.status);
       const text = await res.text();
       if (!text) return null;
-      try { return JSON.parse(text); }
+      let out;
+      try { out = JSON.parse(text); }
       catch (e) { throw new Error('รูปแบบข้อมูลตอบกลับไม่ถูกต้อง'); }
+
+      if (isUnauthorized(out)) {
+        const err2 = new Error('ต้องใส่รหัสเข้าถึง');
+        err2.code = 'unauthorized';
+        throw err2;
+      }
+      return out;
     } catch (err) {
       if (err && err.name === 'AbortError') throw new Error('หมดเวลารอการตอบกลับ');
       throw err;
@@ -2279,7 +2310,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
   async function loadConfig(silent) {
     try {
-      const data = await requestJSON(GAS_URL + '?action=' + ACTIONS.config + '&t=' + Date.now(), null, 20000);
+      const data = await requestJSON(apiUrl('action=' + ACTIONS.config), null, 20000);
       const types = data && Array.isArray(data.vehicleTypes) ? data.vehicleTypes : [];
       state.config = {
         vehicleTypes: types.map(str).filter(Boolean),
@@ -2288,7 +2319,8 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       state.configError = '';
     } catch (err) {
       state.configError = (err && err.message) || 'โหลดตัวเลือกไม่สำเร็จ';
-      if (!silent) {
+      if (err && err.code === 'unauthorized') openKeyGate('ต้องใส่รหัสก่อนจึงจะโหลดตัวเลือกได้');
+      else if (!silent) {
         notify('warn', 'โหลดตัวเลือกไม่สำเร็จ', 'ใช้ตัวเลือกสำรองไปก่อน แล้วกดรีเฟรชอีกครั้ง');
       }
     }
@@ -2851,7 +2883,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
 
     // ส่งแบบ text/plain เพื่อหลีกเลี่ยง CORS preflight (เหมือน Apps Script ทั่วไป)
     try {
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(apiUrl(''), {
         method: 'POST',
         body: JSON.stringify(payloadBody),
         signal: controller.signal
@@ -2866,6 +2898,10 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       try { json = JSON.parse(text); }
       catch (e) { throw new Error('รูปแบบข้อมูลตอบกลับไม่ถูกต้อง'); }
 
+      if (isUnauthorized(json)) {
+        openKeyGate('รหัสไม่ถูกต้องหรือถูกเปลี่ยน');
+        throw new Error('ต้องใส่รหัสเข้าถึง');
+      }
       if (json && (json.success === false || json.ok === false || json.error)) {
         throw new Error(json.message || json.error || 'เซิร์ฟเวอร์ปฏิเสธการบันทึก');
       }
@@ -3006,6 +3042,55 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
   }
 
   /* =========================================================
+     ACCESS KEY GATE
+     ========================================================= */
+  function openKeyGate(message) {
+    if (document.getElementById('keyGate')) return;
+
+    const wrap = document.createElement('div');
+    wrap.id = 'keyGate';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,14,22,.72);' +
+      'display:flex;align-items:center;justify-content:center;padding:20px';
+
+    const card = document.createElement('form');
+    card.style.cssText = 'width:100%;max-width:360px;background:#fff;border-radius:14px;padding:22px;' +
+      'box-shadow:0 18px 50px rgba(0,0,0,.35);font-family:inherit;color:#111';
+    card.innerHTML =
+      '<h2 style="margin:0 0 6px;font-size:17px">ใส่รหัสเข้าถึง</h2>' +
+      '<p style="margin:0 0 14px;font-size:13px;color:#5b6472">' +
+      esc(message || 'ข้อมูลชุดนี้ต้องใช้รหัสที่ตั้งไว้ใน Apps Script') + '</p>' +
+      '<input id="keyGateInput" type="password" autocomplete="current-password" ' +
+      'placeholder="Access key" aria-label="Access key" ' +
+      'style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #ccd3dd;' +
+      'border-radius:9px;font-size:15px">' +
+      '<button type="submit" style="margin-top:12px;width:100%;padding:11px;border:0;border-radius:9px;' +
+      'background:#b91c1c;color:#fff;font-size:15px;font-weight:600;cursor:pointer">เข้าสู่ระบบ</button>' +
+      '<button type="button" id="keyGateCancel" style="margin-top:8px;width:100%;padding:9px;border:0;' +
+      'background:transparent;color:#5b6472;font-size:13px;cursor:pointer">ปิด</button>';
+
+    card.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const input = document.getElementById('keyGateInput');
+      const value = str(input && input.value);
+      if (!value) { if (input) input.focus(); return; }
+      setKey(value);
+      wrap.remove();
+      loadData();
+    });
+
+    const cancel = function () { wrap.remove(); };
+    card.querySelector('#keyGateCancel').addEventListener('click', cancel);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+    setTimeout(function () {
+      const i = document.getElementById('keyGateInput');
+      if (i) i.focus();
+    }, 60);
+  }
+
+  /* =========================================================
      DATA LOADING
      ========================================================= */
   async function loadData(options) {
@@ -3016,7 +3101,7 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
     progressStart();
 
     try {
-      const data = await requestJSON(GAS_URL + '?action=' + ACTIONS.data + '&t=' + Date.now(), null, 25000);
+      const data = await requestJSON(apiUrl('action=' + ACTIONS.data), null, 25000);
       let rows = [];
       if (Array.isArray(data)) rows = data;
       else if (data && Array.isArray(data.data)) rows = data.data;
@@ -3034,7 +3119,10 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       }
     } catch (err) {
       state.loadError = (err && err.message) || 'โหลดข้อมูลไม่สำเร็จ';
-      if (!opts.silent) notify('err', 'โหลดข้อมูลไม่สำเร็จ', state.loadError);
+      if (err && err.code === 'unauthorized') openKeyGate('');
+      if (!opts.silent && !(err && err.code === 'unauthorized')) {
+        notify('err', 'โหลดข้อมูลไม่สำเร็จ', state.loadError);
+      }
     } finally {
       state.loading = false;
       progressEnd();
