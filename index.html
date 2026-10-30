@@ -3106,6 +3106,10 @@ body.sheet-open .fab { opacity: 0; pointer-events: none; transform: translateY(1
       if (Array.isArray(data)) rows = data;
       else if (data && Array.isArray(data.data)) rows = data.data;
       else if (data && Array.isArray(data.records)) rows = data.records;
+      else if (data && (data.error || data.ok === false)) {
+        // อย่าแสดง "ยังไม่มีเคส" เมื่อจริง ๆ คือเซิร์ฟเวอร์ปฏิเสธ
+        throw new Error(data.error || data.message || 'เซิร์ฟเวอร์ปฏิเสธคำขอ');
+      }
 
       state.records = rows.map(normalize);
       state.lastUpdated = Date.now();
